@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ponytail-ponytail",
+  "description": "Lazy senior dev mode for Claude Code. The best code is the code you never wrote.",
+  "owner": {
+    "name": "Duke"
+  },
+  "plugins": [
+    {
+      "name": "ponytail-ponytail",
+      "description": "Forces the laziest solution that works. YAGNI, stdlib first, one line over fifty.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
