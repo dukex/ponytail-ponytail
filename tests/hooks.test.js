@@ -1,10 +1,7 @@
 #!/usr/bin/env node
-// Hook behaviour checks, native Claude Code only.
-//
-// Upstream ponytail runs the same scripts under Codex, Copilot, Qoder and pi, so
-// every assertion there had to branch on the output envelope. Here there is one
-// host, so SessionStart/UserPromptSubmit assert raw stdout and SubagentStart
-// asserts the hookSpecificOutput JSON form (raw stdout is dropped for that event).
+// Hook behaviour checks. SessionStart and UserPromptSubmit assert raw stdout;
+// SubagentStart asserts the hookSpecificOutput JSON form, since raw stdout is
+// dropped for that event.
 
 const assert = require('assert');
 const fs = require('fs');
@@ -156,9 +153,8 @@ assert.equal(result.status, 0, result.stderr);
 assert.equal(fs.readFileSync(trackFlag, 'utf8'), 'lite');
 assert.match(result.stdout, /PONYTAIL MODE ACTIVE — level: lite/);
 
-// Claude Code namespaces plugin skills as /<plugin>:<skill>, so the tracker has
-// to see through the prefix. Upstream compared against a hardcoded /ponytail:
-// pair, which silently stopped matching once the plugin was renamed.
+// Claude Code namespaces plugin skills as /<plugin>:<skill>, and tab completion
+// inserts that form, so the tracker has to see through the prefix.
 result = run('ponytail-mode-tracker.js', trackEnv, JSON.stringify({ prompt: '/ponytail-ponytail:ponytail ultra' }));
 assert.equal(result.status, 0, result.stderr);
 assert.equal(fs.readFileSync(trackFlag, 'utf8'), 'ultra');

@@ -101,10 +101,8 @@ function getDefaultMode() {
   return DEFAULT_MODE;
 }
 
-// Hide the status-bar indicator while keeping ponytail active.
-// PONYTAIL_HIDE_STATUS=1 (or any truthy value; 0/false/empty mean "don't hide")
-// takes precedence, else config.hideStatus === true. Also suppresses the
-// statusline setup nudge: someone who hid the badge does not want to be sold it.
+// Hides the statusline badge and its setup nudge while keeping ponytail active.
+// PONYTAIL_HIDE_STATUS=1 (0/false/empty mean "don't hide") beats config.hideStatus.
 function getHideStatus() {
   const env = process.env.PONYTAIL_HIDE_STATUS;
   if (env !== undefined) {

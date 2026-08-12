@@ -10,11 +10,9 @@ const {
 } = require('./ponytail-config');
 const { clearMode, readMode, setMode, writeHookOutput } = require('./ponytail-runtime');
 
-// Claude Code namespaces plugin skills as /<plugin>:<skill>, and tab completion
-// inserts that form, so the namespace has to be optional rather than a hardcoded
-// pair of literals. The lookahead makes the skill name a whole token: the
-// one-shot skills (/ponytail-audit, /ponytail-debt, /ponytail-help) share the
-// prefix but must never touch the mode.
+// The optional group absorbs the /<plugin>: namespace tab completion inserts.
+// The lookahead makes the skill name a whole token, so /ponytail-audit and the
+// other one-shot skills share the prefix without touching the mode.
 const COMMAND = /^[/@$](?:[\w-]+:)?(ponytail-review|ponytail)(?=\s|$)/;
 
 let input = '';

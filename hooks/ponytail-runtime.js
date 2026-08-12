@@ -1,9 +1,5 @@
 #!/usr/bin/env node
 // ponytail — session state and hook output
-//
-// Upstream carried a state-dir and output-envelope branch per host (Codex,
-// Copilot, VS Code Copilot, Qoder). One host means one state dir and one rule
-// about which events accept raw stdout.
 
 const fs = require('fs');
 const path = require('path');

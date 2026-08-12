@@ -56,10 +56,8 @@ function getPonytailInstructions(mode) {
     return header + '\n\n' +
       filterSkillBodyForMode(fs.readFileSync(SKILL_PATH, 'utf8'), effectiveMode);
   } catch (e) {
-    // skills/ ships alongside hooks/ in the same plugin, so this only fires on a
-    // broken install, and the header alone still tells the model ponytail is on.
-    // Upstream kept a second copy of the whole ruleset here as a string literal
-    // for its npm install path; two copies of the rules is two things to drift.
+    // Broken install only: skills/ ships alongside hooks/. The header alone
+    // still tells the model ponytail is on.
     return header;
   }
 }
