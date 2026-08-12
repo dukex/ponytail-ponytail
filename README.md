@@ -113,9 +113,10 @@ export PONYTAIL_DEFAULT_MODE=ultra   # off | lite | full | ultra
 ## Layout
 
 ```
-.claude-plugin/plugin.json         manifest, points at hooks/hooks.json
+.claude-plugin/plugin.json         manifest
 .claude-plugin/marketplace.json    so `/plugin marketplace add` works
 hooks/hooks.json                   SessionStart, SubagentStart, UserPromptSubmit
+                                   (auto-loaded by name, never named in the manifest)
 hooks/ponytail-activate.js         writes the flag, injects the ruleset
 hooks/ponytail-mode-tracker.js     parses /ponytail commands
 hooks/ponytail-subagent.js         injects into Task-spawned agents

@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-// Manifest wiring. The upstream repo shipped 13 host manifests kept in sync by a
-// script; here there is one plugin name in three places, and a skill directory
-// whose name has to match its frontmatter or Claude Code will not resolve the
-// slash command.
+// Manifest wiring: one plugin name in three places, and skill directories whose
+// names have to match their frontmatter or the slash command never resolves.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -14,10 +12,12 @@ const PLUGIN_NAME = 'ponytail-ponytail';
 
 const read = (rel) => JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
 
-test('plugin manifest names the plugin and points at the hooks config', () => {
+// hooks/hooks.json auto-loads by name; naming it in manifest.hooks too makes
+// Claude Code reject it as a duplicate and drop every hook.
+test('plugin manifest names the plugin and leaves hooks to auto-discovery', () => {
   const manifest = read('.claude-plugin/plugin.json');
   assert.equal(manifest.name, PLUGIN_NAME);
-  assert.equal(manifest.hooks, './hooks/hooks.json', 'must not rely on root hooks auto-discovery');
+  assert.equal(manifest.hooks, undefined, 'declaring the auto-loaded hooks/hooks.json double-loads it');
   assert.ok(fs.existsSync(path.join(root, 'hooks', 'hooks.json')));
 });
 

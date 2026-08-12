@@ -6,6 +6,5 @@
     "name": "Duke"
   },
   "homepage": "https://github.com/DietrichGebert/ponytail",
-  "license": "MIT",
-  "hooks": "./hooks/hooks.json"
+  "license": "MIT"
 }
