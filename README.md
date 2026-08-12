@@ -9,8 +9,8 @@ ruleset and the same hooks, with everything that is not Claude Code deleted.
 
 Upstream ships one repo that targets 13 hosts (Cursor, Windsurf, Cline, Kiro,
 Qoder, OpenCode, OpenClaw, Codex, Copilot, Gemini CLI, Devin, Grok, Hermes, pi,
-plus an MCP server). That is 159 files and roughly 15,500 lines. Claude Code
-reads seven of those paths.
+plus an MCP server). That is 159 files: 12,366 lines of text and 11 image
+assets. Claude Code reads seven of those paths.
 
 | Removed | Why |
 |---|---|
@@ -24,7 +24,8 @@ reads seven of those paths.
 | the `isCopilot` / `isCodex` / `isQoder` branches in the hooks | one host, one state directory, one output envelope |
 | `ponytail-gain` skill | it printed benchmark medians from `benchmarks/`, which is gone. `/ponytail-debt` and `/ponytail-audit` give the real per-repo numbers |
 
-Result: 20 files, about 700 lines of JS and Markdown.
+Result: 23 files, 1,618 lines. 496 of JS across six hooks, 336 of skill
+Markdown, 495 of tests, and the rest manifests, README and CI.
 
 Two things changed rather than shrank:
 
