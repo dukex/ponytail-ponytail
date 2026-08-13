@@ -49,6 +49,12 @@ Restart, or run `/reload-plugins`. Ponytail activates on every session start.
 Do not install this alongside upstream ponytail. Both inject a full ruleset on
 `SessionStart` and both write the same `~/.claude/.ponytail-active` flag.
 
+Installing copies the repo to `~/.claude/plugins/cache/<name>/<name>/<version>/`,
+and that cache is keyed by version. Editing the repo changes nothing for an
+installed plugin until you bump `version` in `plugin.json`; `claude plugin
+update` reports "already at the latest version" and copies nothing. Bump, then
+update, then restart.
+
 ## Use
 
 | Level | Trigger | Behaviour |
