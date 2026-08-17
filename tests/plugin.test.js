@@ -42,12 +42,3 @@ test('every skill directory matches its frontmatter name', () => {
     assert.match(frontmatter[1], /^description:/m, `${dir}/SKILL.md needs a description to be discoverable`);
   }
 });
-
-// The ruleset injected by the hooks is read straight from this file, so a rename
-// or a missing intensity table silently degrades every session to the fallback.
-test('the ponytail skill carries the intensity table the mode filter keys on', () => {
-  const body = fs.readFileSync(path.join(root, 'skills', 'ponytail', 'SKILL.md'), 'utf8');
-  for (const mode of ['lite', 'full', 'ultra']) {
-    assert.match(body, new RegExp(`\\|\\s\\*\\*${mode}\\*\\*\\s\\|`), `missing the ${mode} intensity row`);
-  }
-});

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ponytail — shared configuration resolver
+// ponytail — mode resolution, session state, and hook output
 //
 // Resolution order for default mode:
 //   1. PONYTAIL_DEFAULT_MODE environment variable
@@ -14,23 +14,15 @@ const path = require('path');
 const os = require('os');
 
 const DEFAULT_MODE = 'full';
-const VALID_MODES = ['off', 'lite', 'full', 'ultra', 'review'];
 const RUNTIME_MODES = ['off', 'lite', 'full', 'ultra'];
+// review is session-only: never a valid default, so it lives outside
+// RUNTIME_MODES and callers have to opt into it by passing VALID_MODES.
+const VALID_MODES = [...RUNTIME_MODES, 'review'];
 
-function normalizeMode(mode) {
+function normalizeMode(mode, modes = RUNTIME_MODES) {
   if (typeof mode !== 'string') return null;
   const normalized = mode.trim().toLowerCase();
-  return RUNTIME_MODES.includes(normalized) ? normalized : null;
-}
-
-function normalizeConfigMode(mode) {
-  if (typeof mode !== 'string') return null;
-  const normalized = mode.trim().toLowerCase();
-  return VALID_MODES.includes(normalized) ? normalized : null;
-}
-
-function normalizePersistedMode(mode) {
-  return normalizeMode(mode) || normalizeConfigMode(mode);
+  return modes.includes(normalized) ? normalized : null;
 }
 
 // "stop ponytail" / "normal mode" turn ponytail off, but only as a standalone
@@ -40,15 +32,6 @@ function normalizePersistedMode(mode) {
 function isDeactivationCommand(text) {
   const t = String(text || '').trim().toLowerCase().replace(/[.!?\s]+$/, '');
   return t === 'stop ponytail' || t === 'normal mode';
-}
-
-// ponytail: only embed the plugin install path in a statusline shell command when
-// it's made of ordinary path characters. An allowlist beats escaping every shell's
-// metacharacters; a hostile clone path (quotes, &, $, backtick, ;, etc.) falls back
-// to manual setup instead. Allows : \ / for normal Windows and POSIX paths. Full
-// per-shell escaper only if a real need appears.
-function isShellSafe(p) {
-  return typeof p === 'string' && /^[A-Za-z0-9 _.\-:/\\~]+$/.test(p);
 }
 
 function getConfigDir() {
@@ -68,10 +51,11 @@ function getConfigPath() {
   return path.join(getConfigDir(), 'config.json');
 }
 
-// Strip the UTF-8 BOM some editors prepend on Windows, it breaks JSON.parse.
+// trim() also strips the UTF-8 BOM some Windows editors prepend (U+FEFF counts
+// as whitespace in JS), which JSON.parse would otherwise reject.
 function readConfig() {
   try {
-    const config = JSON.parse(fs.readFileSync(getConfigPath(), 'utf8').replace(/^\uFEFF/, ''));
+    const config = JSON.parse(fs.readFileSync(getConfigPath(), 'utf8').trim());
     if (!config || typeof config !== 'object' || Array.isArray(config)) return {};
     return config;
   } catch (e) {
@@ -84,36 +68,15 @@ function getClaudeDir() {
   return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 }
 
+// normalizeMode validates against RUNTIME_MODES, so a stray env var or config
+// can't make the session-only review mode the default.
 function getDefaultMode() {
-  // ponytail: a default must be a runtime level (off/lite/full/ultra); review is
-  // a session-only mode, never a valid default. Validate against RUNTIME_MODES
-  // so a stray env var or config can't make review the default.
-  const envMode = process.env.PONYTAIL_DEFAULT_MODE;
-  if (envMode && RUNTIME_MODES.includes(envMode.toLowerCase())) {
-    return envMode.toLowerCase();
-  }
-
-  const configMode = readConfig().defaultMode;
-  if (typeof configMode === 'string' && RUNTIME_MODES.includes(configMode.toLowerCase())) {
-    return configMode.toLowerCase();
-  }
-
-  return DEFAULT_MODE;
-}
-
-// Hides the statusline badge and its setup nudge while keeping ponytail active.
-// PONYTAIL_HIDE_STATUS=1 (0/false/empty mean "don't hide") beats config.hideStatus.
-function getHideStatus() {
-  const env = process.env.PONYTAIL_HIDE_STATUS;
-  if (env !== undefined) {
-    const v = env.trim().toLowerCase();
-    return v !== '' && v !== '0' && v !== 'false' && v !== 'no';
-  }
-  return readConfig().hideStatus === true;
+  return normalizeMode(process.env.PONYTAIL_DEFAULT_MODE) ||
+    normalizeMode(readConfig().defaultMode) ||
+    DEFAULT_MODE;
 }
 
 function writeDefaultMode(mode) {
-  // ponytail: only a runtime level can be a default; review is session-only.
   const normalized = normalizeMode(mode);
   if (!normalized) return null;
 
@@ -125,14 +88,50 @@ function writeDefaultMode(mode) {
   return normalized;
 }
 
+function statePath() {
+  return path.join(getClaudeDir(), '.ponytail-active');
+}
+
+function setMode(mode) {
+  fs.mkdirSync(getClaudeDir(), { recursive: true });
+  fs.writeFileSync(statePath(), mode);
+}
+
+function clearMode() {
+  try { fs.unlinkSync(statePath()); } catch (e) {}
+}
+
+// Live mode written by activate/mode-tracker. Absent flag = ponytail off.
+function readMode() {
+  try {
+    return fs.readFileSync(statePath(), 'utf8').trim() || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// SessionStart and UserPromptSubmit accept raw stdout as added context, but
+// SubagentStart drops it unless it arrives in the hookSpecificOutput JSON form.
+function writeHookOutput(event, context = '') {
+  if (event === 'SubagentStart') {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: { hookEventName: event, additionalContext: context },
+    }));
+    return;
+  }
+  process.stdout.write(context);
+}
+
 module.exports = {
   DEFAULT_MODE,
+  VALID_MODES,
+  clearMode,
   getClaudeDir,
   getDefaultMode,
-  getHideStatus,
   isDeactivationCommand,
-  isShellSafe,
   normalizeMode,
-  normalizePersistedMode,
+  readMode,
+  setMode,
   writeDefaultMode,
+  writeHookOutput,
 };

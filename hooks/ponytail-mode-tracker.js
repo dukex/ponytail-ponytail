@@ -3,12 +3,15 @@
 // Inspects the prompt for /ponytail commands and writes the mode to the flag file.
 
 const {
+  clearMode,
   getDefaultMode,
   isDeactivationCommand,
   normalizeMode,
+  readMode,
+  setMode,
   writeDefaultMode,
+  writeHookOutput,
 } = require('./ponytail-config');
-const { clearMode, readMode, setMode, writeHookOutput } = require('./ponytail-runtime');
 
 // The optional group absorbs the /<plugin>: namespace tab completion inserts.
 // The lookahead makes the skill name a whole token, so /ponytail-audit and the
@@ -22,8 +25,9 @@ function finish() {
   if (done) return;
   done = true;
   try {
-    // Strip the UTF-8 BOM some shells prepend when piping (breaks JSON.parse).
-    const data = JSON.parse(input.replace(/^\uFEFF/, ''));
+    // trim() also strips the UTF-8 BOM some shells prepend when piping
+    // (U+FEFF counts as whitespace in JS), which JSON.parse would reject.
+    const data = JSON.parse(input.trim());
     const prompt = (data.prompt || '').trim().toLowerCase();
     const command = prompt.match(COMMAND);
 

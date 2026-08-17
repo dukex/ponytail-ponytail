@@ -11,21 +11,11 @@ const { spawnSync } = require('child_process');
 
 const root = path.join(__dirname, '..');
 
-// isShellSafe gates the statusline setup snippet: ordinary install paths pass,
-// paths carrying shell metacharacters are rejected so they never get embedded
-// in a shell command.
 const {
   DEFAULT_MODE,
   getDefaultMode,
-  isShellSafe,
   writeDefaultMode,
 } = require('../hooks/ponytail-config');
-
-assert.equal(isShellSafe('C:\\Users\\x\\.claude\\plugins\\ponytail\\hooks\\ponytail-statusline.ps1'), true);
-assert.equal(isShellSafe('/home/u/.claude/plugins/ponytail/hooks/ponytail-statusline.sh'), true);
-assert.equal(isShellSafe('/tmp/a"&calc.exe&"/x.sh'), false);
-assert.equal(isShellSafe('/tmp/$(calc)/x.sh'), false);
-assert.equal(isShellSafe('/tmp/a;rm -rf/x.sh'), false);
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ponytail-hooks-'));
 // Runs on normal exit and on assertion-throw exit; force makes it idempotent.
@@ -40,12 +30,10 @@ function run(script, env, input = '') {
   });
 }
 
-// A value leaked from the dev or CI shell would steer the default-dir and
-// scoping assertions off the path under test.
+// A value leaked from the dev or CI shell would steer the default-dir
+// assertions off the path under test.
 delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.PONYTAIL_DEFAULT_MODE;
-delete process.env.PONYTAIL_SUBAGENT_MATCHER;
-delete process.env.PONYTAIL_HIDE_STATUS;
 
 let result;
 let output;
@@ -61,13 +49,14 @@ assert.equal(result.status, 0, result.stderr);
 assert.equal(fs.readFileSync(path.join(home, '.claude', '.ponytail-active'), 'utf8'), 'full');
 assert.match(result.stdout, /PONYTAIL MODE ACTIVE — level: full/);
 
-// The ruleset is filtered to the active level: the intensity table keeps only
-// the row for the current mode, and the worked example for that mode.
+// The header carries the active level and the SKILL.md body follows it, minus
+// frontmatter. A body that failed to load degrades to the header alone, which
+// is silent enough to be worth asserting against.
 result = run('ponytail-activate.js', { ...claudeEnv, HOME: path.join(temp, 'lite-home'), USERPROFILE: path.join(temp, 'lite-home'), PONYTAIL_DEFAULT_MODE: 'lite' });
 assert.equal(result.status, 0, result.stderr);
-assert.match(result.stdout, /\|\s\*\*lite\*\*\s\|/, 'lite must keep its own intensity row');
-assert.doesNotMatch(result.stdout, /\|\s\*\*ultra\*\*\s\|/, 'lite must drop the ultra intensity row');
-assert.match(result.stdout, /No unrequested abstractions/, 'ordinary rule bullets must survive the mode filter');
+assert.match(result.stdout, /PONYTAIL MODE ACTIVE — level: lite/);
+assert.match(result.stdout, /No unrequested abstractions/, 'the ruleset body must reach the session');
+assert.doesNotMatch(result.stdout, /^description:/m, 'SKILL.md frontmatter must be stripped');
 
 // off skips activation entirely: no flag file, no ruleset.
 const offHome = path.join(temp, 'off-home');
@@ -92,43 +81,6 @@ assert.equal(
   fs.existsSync(path.join(home2, '.claude', '.ponytail-active')),
   false,
   'flag must not land in ~/.claude when CLAUDE_CONFIG_DIR is set',
-);
-// The statusline setup nudge must point at the configured settings.json.
-assert.ok(
-  result.stdout.includes(path.join(customConfigDir, 'settings.json')),
-  'statusline nudge must reference the CLAUDE_CONFIG_DIR settings.json',
-);
-
-// The nudge fires at most once: after it writes its flag, a later session stays
-// silent instead of re-nagging on every start.
-assert.ok(
-  fs.existsSync(path.join(customConfigDir, '.ponytail-statusline-nudged')),
-  'first nudge must write the once-only flag',
-);
-result = run('ponytail-activate.js', {
-  HOME: home2,
-  USERPROFILE: home2,
-  CLAUDE_CONFIG_DIR: customConfigDir,
-  PONYTAIL_DEFAULT_MODE: 'lite',
-});
-assert.equal(result.status, 0, result.stderr);
-assert.ok(
-  !result.stdout.includes('STATUSLINE SETUP NEEDED'),
-  'nudge must not repeat once the flag file exists',
-);
-
-// PONYTAIL_HIDE_STATUS suppresses the nudge: the user opted out of the badge.
-const hideHome = path.join(temp, 'hide-home');
-result = run('ponytail-activate.js', {
-  HOME: hideHome,
-  USERPROFILE: hideHome,
-  PONYTAIL_DEFAULT_MODE: 'full',
-  PONYTAIL_HIDE_STATUS: '1',
-});
-assert.equal(result.status, 0, result.stderr);
-assert.ok(
-  !result.stdout.includes('STATUSLINE SETUP NEEDED'),
-  'PONYTAIL_HIDE_STATUS must suppress the statusline nudge',
 );
 
 // --- UserPromptSubmit -------------------------------------------------------
@@ -227,6 +179,9 @@ assert.equal(JSON.parse(fs.readFileSync(defConfig, 'utf8')).defaultMode, 'lite',
 // SessionStart context is parent-thread only and never reaches subagents, so
 // without this hook every Task-spawned agent runs ponytail-unaware. Native
 // Claude needs the hookSpecificOutput JSON form here or the context is dropped.
+// run() passes empty stdin, which also covers the hook staying stdin-independent:
+// on Windows the PowerShell wrapper can swallow the piped JSON, and waiting on
+// it would stall every subagent spawn.
 const subHome = path.join(temp, 'sub-home');
 const subFlag = path.join(subHome, '.claude', '.ponytail-active');
 fs.mkdirSync(path.dirname(subFlag), { recursive: true });
@@ -245,69 +200,12 @@ result = run('ponytail-subagent.js', subEnv);
 assert.equal(result.status, 0, result.stderr);
 assert.equal(result.stdout, '', 'SubagentStart must stay silent when ponytail is off');
 
-// PONYTAIL_SUBAGENT_MATCHER limits the injection to agent types whose name
-// matches the regex. Unset keeps the inject-into-every-subagent behaviour
-// asserted above. The matcher is case-insensitive, unanchored, and every
-// uncertain case fails open.
-const scopeHome = path.join(temp, 'scope-home');
-const scopeFlag = path.join(scopeHome, '.claude', '.ponytail-active');
-fs.mkdirSync(path.dirname(scopeFlag), { recursive: true });
-fs.writeFileSync(scopeFlag, 'full');
-const scopeEnv = { HOME: scopeHome, USERPROFILE: scopeHome };
-
-result = run(
-  'ponytail-subagent.js',
-  { ...scopeEnv, PONYTAIL_SUBAGENT_MATCHER: 'general|plan' },
-  JSON.stringify({ agent_type: 'General-purpose' }),
-);
+// review reaches subagents as the short pointer, not the full ruleset.
+fs.writeFileSync(subFlag, 'review');
+result = run('ponytail-subagent.js', subEnv);
 assert.equal(result.status, 0, result.stderr);
 output = JSON.parse(result.stdout);
-assert.match(output.hookSpecificOutput.additionalContext, /PONYTAIL MODE ACTIVE — level: full/);
-
-result = run(
-  'ponytail-subagent.js',
-  { ...scopeEnv, PONYTAIL_SUBAGENT_MATCHER: 'general|plan' },
-  JSON.stringify({ agent_type: 'Explore' }),
-);
-assert.equal(result.status, 0, result.stderr);
-assert.equal(result.stdout, '', 'a non-matching agent_type must skip the injection');
-
-result = run(
-  'ponytail-subagent.js',
-  { ...scopeEnv, PONYTAIL_SUBAGENT_MATCHER: '^general$' },
-  JSON.stringify({ agent_type: 'general-purpose' }),
-);
-assert.equal(result.status, 0, result.stderr);
-assert.equal(result.stdout, '', 'an anchored matcher must not match a superset agent_type');
-
-// Matcher set but agent_type absent → fail open and inject rather than
-// silently dropping the persona.
-result = run(
-  'ponytail-subagent.js',
-  { ...scopeEnv, PONYTAIL_SUBAGENT_MATCHER: 'general' },
-  JSON.stringify({}),
-);
-assert.equal(result.status, 0, result.stderr);
-output = JSON.parse(result.stdout);
-assert.match(output.hookSpecificOutput.additionalContext, /PONYTAIL MODE ACTIVE — level: full/);
-
-// Invalid regex → must not crash; fall back to injecting everywhere.
-result = run(
-  'ponytail-subagent.js',
-  { ...scopeEnv, PONYTAIL_SUBAGENT_MATCHER: '(' },
-  JSON.stringify({ agent_type: 'anything' }),
-);
-assert.equal(result.status, 0, result.stderr);
-output = JSON.parse(result.stdout);
-assert.equal(output.hookSpecificOutput.hookEventName, 'SubagentStart');
-
-// The default (no matcher) path must not depend on stdin: even with stdin
-// closed empty it injects synchronously, since on Windows the PowerShell
-// wrapper can swallow the piped JSON.
-result = run('ponytail-subagent.js', scopeEnv, '');
-assert.equal(result.status, 0, result.stderr);
-output = JSON.parse(result.stdout);
-assert.match(output.hookSpecificOutput.additionalContext, /PONYTAIL MODE ACTIVE — level: full/);
+assert.match(output.hookSpecificOutput.additionalContext, /level: review\. Behavior defined by the ponytail-review skill\./);
 
 // --- config -----------------------------------------------------------------
 
