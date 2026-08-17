@@ -24,18 +24,24 @@ assets. Claude Code reads seven of those paths.
 | the `isCopilot` / `isCodex` / `isQoder` branches in the hooks | one host, one state directory, one output envelope |
 | `ponytail-gain` skill | it printed benchmark medians from `benchmarks/`, which is gone. `/ponytail-debt` and `/ponytail-audit` give the real per-repo numbers |
 
-Result: 23 files, 1,618 lines. 496 of JS across six hooks, 336 of skill
-Markdown, 495 of tests, and the rest manifests, README and CI.
+Then a second pass, with the plugin already Claude Code only:
 
-Two things changed rather than shrank:
+| Removed | Why |
+|---|---|
+| the mode filter in `ponytail-instructions.js` (31 lines) | it stripped the intensity rows that did not match the active level: 4 lines out of 104. The header already names the level |
+| the statusline setup nudge, `getHideStatus`, `isShellSafe` (~75 lines) | it detected a missing `statusLine`, wrote a "already offered" flag and carried a path allowlist so the snippet was safe to embed. The README below has the JSON |
+| `PONYTAIL_SUBAGENT_MATCHER` (~95 lines with its tests) | the opt-in regex scoping was half of `ponytail-subagent.js` plus the whole stdin/timeout path. Without it the hook is synchronous in 8 lines |
+| `ponytail-runtime.js` | four small functions in their own file, imported next to `ponytail-config` by every hook. Folded into it |
+| `normalizeConfigMode` + `normalizePersistedMode` | since `VALID_MODES ⊃ RUNTIME_MODES` the second was exactly the first. Both collapse into `normalizeMode(mode, modes)` |
+| `tests/hooks-windows.test.js` (91 lines) | it asserted that three identical commands in a static JSON file carry no POSIX shell syntax |
 
-- The `/ponytail` command parser now sees through the plugin namespace, so
-  `/ponytail-ponytail:ponytail ultra` (what tab completion inserts) switches the
-  mode. Upstream compared against a hardcoded `/ponytail:ponytail`, which stops
-  matching the moment the plugin is renamed.
-- `PONYTAIL_HIDE_STATUS` now suppresses the statusline setup nudge. The flag was
-  read only by the pi extension upstream, so in a Claude Code install it did
-  nothing.
+Result: 21 files, 1,230 lines. 309 of JS across five hooks, 336 of skill
+Markdown, 289 of tests, and the rest manifests, README and CI.
+
+One thing changed rather than shrank: the `/ponytail` command parser now sees
+through the plugin namespace, so `/ponytail-ponytail:ponytail ultra` (what tab
+completion inserts) switches the mode. Upstream compared against a hardcoded
+`/ponytail:ponytail`, which stops matching the moment the plugin is renamed.
 
 ## Install
 
@@ -75,18 +81,12 @@ config so new sessions start there.
 | `/ponytail-debt` | harvests every `ponytail:` shortcut comment into a ledger |
 | `/ponytail-help` | reference card |
 
-Subagents get the ruleset too, via `SubagentStart`. Scope it with a regex if you
-only want some of them:
-
-```bash
-export PONYTAIL_SUBAGENT_MATCHER='general|plan'
-```
+Every Task-spawned subagent gets the ruleset too, via `SubagentStart`.
 
 ## Statusline badge
 
 The plugin ships a script that prints `[PONYTAIL]` or `[PONYTAIL:ULTRA]` while
-ponytail is active. On first session it offers to wire itself up. Manually, in
-`~/.claude/settings.json`:
+ponytail is active. Wire it up in `~/.claude/settings.json`:
 
 ```json
 {
@@ -98,7 +98,7 @@ ponytail is active. On first session it offers to wire itself up. Manually, in
 ```
 
 Windows uses `powershell -ExecutionPolicy Bypass -File "...\ponytail-statusline.ps1"`.
-Set `PONYTAIL_HIDE_STATUS=1` to skip the badge and the setup offer.
+Leave `statusLine` unset to skip the badge.
 
 ## Configure
 
@@ -111,7 +111,7 @@ export PONYTAIL_DEFAULT_MODE=ultra   # off | lite | full | ultra
 `~/.config/ponytail/config.json` (`%APPDATA%\ponytail\config.json` on Windows):
 
 ```json
-{ "defaultMode": "lite", "hideStatus": false }
+{ "defaultMode": "lite" }
 ```
 
 `review` is a session mode only, never a valid default.
@@ -126,17 +126,15 @@ hooks/hooks.json                   SessionStart, SubagentStart, UserPromptSubmit
 hooks/ponytail-activate.js         writes the flag, injects the ruleset
 hooks/ponytail-mode-tracker.js     parses /ponytail commands
 hooks/ponytail-subagent.js         injects into Task-spawned agents
-hooks/ponytail-instructions.js     reads SKILL.md, filters it to the active level
-hooks/ponytail-config.js           mode resolution and persistence
-hooks/ponytail-runtime.js          flag file and hook output envelope
+hooks/ponytail-instructions.js     reads SKILL.md, prefixes the active level
+hooks/ponytail-config.js           mode resolution, flag file, hook output envelope
 hooks/ponytail-statusline.{sh,ps1} the badge
 skills/*/SKILL.md                  the ruleset and the five slash commands
 tests/*.test.js                    node --test, no framework
 ```
 
-`skills/ponytail/SKILL.md` is the ruleset. The hooks read it at session start and
-strip the intensity rows that do not match the active level, so editing that file
-changes behaviour with no code change.
+`skills/ponytail/SKILL.md` is the ruleset. The hooks read it at session start, so
+editing that file changes behaviour with no code change.
 
 ## Tests
 
